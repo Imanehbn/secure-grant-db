@@ -1,0 +1,5 @@
+.env
+config.php
+*.local.sql
+*.sql.bak
+backup/*.sql
