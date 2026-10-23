@@ -66,3 +66,31 @@ Apache 2.4.58, phpMyAdmin.
   ## Phase 1: Schema import
 - The script created grantdb with 11 tables and seeded 6 roles. The 15
   statements executed without failure. This is the baseline for Phase 2
+  ## Phase 2: Privilege tests for pi_user1 (P2-04-to-08-pi-user1-tests.png)
+- **Allowed:** SELECT COUNT(*) FROM proposals returns 0. The PI can read
+  proposals (the table is empty at this stage).
+- **ERROR 1143 on bank_account_enc:** column-level privilege hides banking
+  data from PIs, which limits damage if a PI account is stolen.
+- **ERROR 1142 on users:** PIs have no access to credentials or password hashes.
+- **ERROR 1143 on proposals.status:** a PI cannot set their own proposal to
+  Approved. The only route to submission is the stored procedure
+  sp_submit_proposal, which moves a proposal from Draft to Submitted only.
+- **ERROR 1142 on DELETE:** no role except the DBA can delete proposals.
+- **Conclusion:** the database itself enforces least privilege, independently
+  of what the application does.
+  ## Phase 2: Privilege tests for the other roles (P2-09 to P2-13)
+- reviewer1: ERROR 1143 on proposals.pi_id (blind review) and ERROR 1142 on grants.
+- grants_officer1: ERROR 1143 on researchers.national_id_enc and ERROR 1142 on
+  DELETE FROM grants. The research office manages awards but sees no identity
+  or banking data and cannot delete.
+- finance1: reads bank_account_enc (needed to pay researchers) but gets
+  ERROR 1142 on UPDATE grants. Separation of duties between awarding and paying.
+- auditor1: reads audit_log but gets ERROR 1142 on INSERT. A read-only auditor
+  cannot tamper with the evidence.
+- app_login: reads credentials only; ERROR 1142 on proposals, so a SQL
+  injection in the login page cannot reach business data.
+- Note: allowed queries return 0 because tables are empty at this stage; they
+  prove the privilege, not the data.
+- Incident: logins failed with ERROR 1045 because a password stored via
+  copy-paste contained a trailing space. Resolved by generating passwords
+  with a script and reading them from a file outside the repository.

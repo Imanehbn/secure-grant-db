@@ -106,13 +106,13 @@ GRANT INSERT ON grantdb.audit_log TO role_app;
 -- ---------------------------------------------------------------------
 -- 4. Database users (one per role for the lab) and role assignment
 -- ---------------------------------------------------------------------
-CREATE USER IF NOT EXISTS 'dba_admin'@'localhost'      IDENTIFIED BY 'CHANGE_ME_dba';
-CREATE USER IF NOT EXISTS 'grants_officer1'@'localhost' IDENTIFIED BY 'CHANGE_ME_officer';
-CREATE USER IF NOT EXISTS 'pi_user1'@'localhost'        IDENTIFIED BY 'CHANGE_ME_pi';
-CREATE USER IF NOT EXISTS 'reviewer1'@'localhost'       IDENTIFIED BY 'CHANGE_ME_reviewer';
-CREATE USER IF NOT EXISTS 'finance1'@'localhost'        IDENTIFIED BY 'CHANGE_ME_finance';
-CREATE USER IF NOT EXISTS 'auditor1'@'localhost'        IDENTIFIED BY 'CHANGE_ME_auditor';
-CREATE USER IF NOT EXISTS 'app_login'@'localhost'       IDENTIFIED BY 'CHANGE_ME_app';
+CREATE OR REPLACE USER 'dba_admin'@'localhost'      IDENTIFIED BY 'CHANGE_ME_dba';
+CREATE OR REPLACE USER 'grants_officer1'@'localhost' IDENTIFIED BY 'CHANGE_ME_officer';
+CREATE OR REPLACE USER 'pi_user1'@'localhost'        IDENTIFIED BY 'CHANGE_ME_pi';
+CREATE OR REPLACE USER 'reviewer1'@'localhost'       IDENTIFIED BY 'CHANGE_ME_reviewer';
+CREATE OR REPLACE USER 'finance1'@'localhost'        IDENTIFIED BY 'CHANGE_ME_finance';
+CREATE OR REPLACE USER 'auditor1'@'localhost'        IDENTIFIED BY 'CHANGE_ME_auditor';
+CREATE OR REPLACE USER 'app_login'@'localhost'       IDENTIFIED BY 'CHANGE_ME_app';
 
 GRANT role_dba            TO 'dba_admin'@'localhost';
 GRANT role_grants_officer TO 'grants_officer1'@'localhost';
