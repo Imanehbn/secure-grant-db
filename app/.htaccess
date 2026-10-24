@@ -1,0 +1,6 @@
+Options -Indexes
+
+# Never serve configuration files over HTTP
+<FilesMatch "^config(\.example)?\.php$">
+    Require all denied
+</FilesMatch>

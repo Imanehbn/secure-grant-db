@@ -94,3 +94,89 @@ Apache 2.4.58, phpMyAdmin.
 - Incident: logins failed with ERROR 1045 because a password stored via
   copy-paste contained a trailing space. Resolved by generating passwords
   with a script and reading them from a file outside the repository.
+  ## Phase 3: Secure authentication (24 Oct 2026)
+
+**Implementation:** PHP login (app/login.php, includes/auth.php, bootstrap.php)
+connected as the least-privileged account app_login. Passwords hashed with
+password_hash (bcrypt), prepared statements, CSRF tokens, secure session
+settings, lockout after 5 failed attempts for 15 minutes, audit logging.
+Design and control list: docs/phase3_authentication.md.
+
+### Test 1: valid login (P3-01-login-success.png)
+- app_pi signs in and sees the dashboard with role PI and its permissions.
+- Proves: the full path works (form, prepared query, bcrypt verification,
+  session creation, role lookup) using only the app_login account.
+
+### Test 2: wrong password (P3-02-wrong-password.mp4)
+- Generic message: "Invalid username or password, or account temporarily locked."
+- Proves: the page does not say which part was wrong.
+
+### Test 3: unknown username (P3-03-unknown-user.mp4)
+- Exactly the same message as test 2.
+- Proves: no username enumeration. An attacker cannot learn which accounts exist.
+
+### Test 4: account lockout (P3-04-lockout.mp4)
+- After 5 wrong passwords on app_auditor, the correct password is refused.
+- Proves: brute force and credential stuffing against one account are stopped.
+- Trade-off: lockout is per account, so an attacker could lock a victim out
+  (denial of service). Mitigation would be per-IP throttling or MFA.
+
+### Test 5: lockout stored in the database (P3-05-lockout-db-row.png)
+- app_auditor shows failed_attempts = 5 and a locked_until time 15 minutes
+  later; app_pi shows its own failed attempts.
+- Proves: the lock is enforced in the database (compared with NOW() in SQL),
+  not only in the page, and cannot be bypassed by changing the browser.
+
+### Test 6: password hash format (P3-06-hash-format.png)
+- All stored hashes start with $2y$10$ and are 60 characters long.
+- Proves: passwords are stored as salted bcrypt hashes, never as plain text.
+  A stolen users table does not reveal the passwords directly.
+
+### Test 7: no session (P3-07-no-session-redirect.mp4)
+- Opening dashboard.php in a private window redirects to login.php.
+- Proves: protected pages check the session on every request.
+
+### Test 8: after logout (P3-08-after-logout.mp4)
+- After Sign out, Back and reload lead to the login page.
+- Proves: logout destroys the server-side session and the cookie, and the
+  page is sent with no-store cache headers.
+
+### Test 9: session cookie flags (P3-09-cookie-flags.png)
+- GRANTSESSID has HttpOnly and SameSite=Strict, and no expiry (session cookie).
+  Secure is off only because the lab runs on HTTP; the code sets it
+  automatically once HTTPS is enabled.
+- Proves: JavaScript cannot read the session id (limits XSS theft) and the
+  browser does not send it on cross-site requests (limits CSRF).
+
+### Test 10: CSRF token rejected (P3-10-csrf-rejected.mp4)
+- With the hidden csrf field altered in DevTools, the form is rejected with
+  "Your session expired" before any credential check.
+- Proves: a login or logout request cannot be forged from another site
+  without the per-session token.
+
+### Test 11: audit trail (P3-11-audit-log.png)
+- audit_log contains LOGIN, LOGIN_FAILED (bad password / unknown user),
+  LOGIN_BLOCKED, ACCOUNT_LOCKED and LOGOUT events with user, time and result.
+- Proves: authentication events are traceable for incident investigation
+  (Phase 10).
+
+### Test 12: configuration file blocked (P3-12-config-blocked.png)
+- http://localhost/grantdb/config.php returns 403 Forbidden.
+- Proves: the database password cannot be downloaded through the web server.
+  The file is also ignored by Git.
+
+### Known limitations
+- HTTP only for now; HTTPS and database TLS are planned (Phases 6 and 9).
+- No multi-factor authentication.
+- PHP and MariaDB use different timezones (dashboard shows 03:34, audit log
+  01:34); to be aligned before Phase 7.
+
+### Incident: database accounts missing (24 Oct)
+- app_login could not connect (ERROR 1045); ALTER USER failed with ERROR 1396.
+  SELECT user, host FROM mysql.user showed all 7 application accounts and 7
+  roles missing, while the grantdb tables were intact.
+- Cause: not determined. Accounts live in the mysql system database, not in grantdb.
+- Recovery: re-ran sql/02_users_roles.sql with newly generated passwords
+  (stored outside the repository) and verified with SHOW GRANTS.
+- Lesson: user and role definitions must be backed up too (Phase 8), and the
+  privilege script must be re-runnable (CREATE OR REPLACE USER).
