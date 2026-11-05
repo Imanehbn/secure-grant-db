@@ -206,3 +206,27 @@ Design and control list: docs/phase3_authentication.md.
   this vulnerable page was never meant to touch the users table in the
   first place; it only could because app_vuln's privileges were not
   scoped to the page's actual needs.
+  ## Phase 5, Test A (re-test): Always-true bypass neutralized
+- Same payload as Phase 4: q=%' OR '1'='1
+- Evidence: P5-02-always-true-blocked.png (injection attempt) vs
+  P5-02-blank-search-baseline.png (ordinary empty search) — identical output.
+- Why: input validation rejects quote/equals characters, resetting q to '';
+  the prepared statement also means the payload text, even if it reached
+  the query, could never be parsed as SQL syntax, only as literal data.
+- Proves: the payload now produces exactly the same result as a legitimate
+  blank search — no special effect, no bypass of intended logic.
+  ## Phase 5, Test B (re-test): UNION-based leak blocked
+- Same payload as Phase 4: q=%' UNION SELECT user_id, username, password_hash FROM users -- -
+- Evidence: P5-03-union-blocked.png
+- Result: page shows the same 7 ordinary proposals (titles and statuses only).
+  No usernames, no password hashes, nothing from the users table appeared.
+- Why: (1) input validation rejects the quote, underscore, comma and equals
+  characters, resetting the search term to empty; (2) even without
+  validation, the prepared statement fixes the query structure before any
+  user input is attached, so a UNION SELECT cannot be injected as new SQL -
+  it is only ever treated as literal text to search for in titles;
+  (3) app_search can only SELECT 3 columns on proposals, so even a
+  successful bypass could never read the users table at all.
+- Proves: all three layers of the fix (prepared statement, input
+  validation, least-privileged account) independently prevent this attack,
+  not just one of them.

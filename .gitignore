@@ -1,5 +1,6 @@
 .env
 config.php
+config_secure.php
 *.local.sql
 *.sql.bak
 backup/*.sql
