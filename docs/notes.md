@@ -180,3 +180,29 @@ Design and control list: docs/phase3_authentication.md.
   (stored outside the repository) and verified with SHOW GRANTS.
 - Lesson: user and role definitions must be backed up too (Phase 8), and the
   privilege script must be re-runnable (CREATE OR REPLACE USER).
+  ## Phase 4, Test A: Always-true WHERE bypass (P4-02-always-true.png)
+- Payload: q=%' OR '1'='1
+- Final query: ...WHERE title LIKE '%%' OR '1'='1'
+- Result: all 7 proposals returned, including both CONFIDENTIAL DRAFT ones
+  that should not be visible in a public search.
+- Root cause: user input concatenated directly into SQL text (search.php).
+- Proves: an attacker needs no valid search term to bypass filtering logic
+  entirely — a single quote and a tautology defeats the WHERE clause.
+  ## Phase 4, Test B: UNION-based data exfiltration (P4-03-union-leak.png)
+- Payload: q=%' UNION SELECT user_id, username, password_hash FROM users -- -
+- Result: all 8 application accounts' usernames and full bcrypt password
+  hashes displayed in the search results, disguised as proposal rows.
+- Root cause: (1) user input concatenated into SQL text, allowing an
+  attacker-controlled UNION SELECT; (2) app_vuln has SELECT on every table
+  in grantdb, not just proposals, so the UNION could reach an unrelated
+  table with no privilege barrier at all.
+- Security impact: an attacker with no credentials could harvest every
+  account's password hash and attempt offline cracking, completely
+  bypassing the Phase 3 login protections (lockout, rate limiting) since
+  those only apply to the login form, not this page.
+- Compare to Phase 3: app_login (the real login account) has NO SELECT
+  privilege on password_hash at all for other users' rows context -- it
+  can only read it for the authentication check itself, and critically
+  this vulnerable page was never meant to touch the users table in the
+  first place; it only could because app_vuln's privileges were not
+  scoped to the page's actual needs.
