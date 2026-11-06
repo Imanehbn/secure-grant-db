@@ -4,3 +4,4 @@ config_secure.php
 *.local.sql
 *.sql.bak
 backup/*.sql
+keys/encryption.key.php

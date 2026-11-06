@@ -230,3 +230,15 @@ Design and control list: docs/phase3_authentication.md.
 - Proves: all three layers of the fix (prepared statement, input
   validation, least-privileged account) independently prevent this attack,
   not just one of them.
+  ## Phase 6: Sensitive data encryption (AES-256-GCM)
+- Encrypted national_id_enc, phone_enc, bank_account_enc for all 3 researchers
+  using application-level AES-256-GCM (not MySQL's AES_ENCRYPT, to keep the
+  key out of SQL query text/logs).
+- P6-01-decrypt-verification.png: all 3 rows decrypt back to their exact
+  original fake values, proving correctness.
+- P6-02-raw-encrypted-bytes.png: SELECT HEX(national_id_enc) as root shows
+  only ciphertext - confirms encryption is real, not just hidden by RBAC.
+- Key lives in keys/encryption.key.php, generated with random_bytes(32),
+  outside both web-servable folders, excluded from Git.
+- Known gap: data in transit (HTTP, no DB TLS) still pending - addressed in
+  Phase 9. Full analysis: docs/phase6_data_protection.md.
