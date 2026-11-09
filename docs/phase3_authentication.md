@@ -50,5 +50,3 @@ Use `http://localhost/grantdb/login.php`. Passwords for the demo accounts are in
 | 10 | Edit the hidden `csrf` field in DevTools and submit | "Your session expired" error, HTTP 400 | `P3-10-csrf-rejected.png` |
 | 11 | `SELECT event_time, username, action, success, details FROM audit_log ORDER BY audit_id DESC LIMIT 20;` | One row per event above | `P3-11-audit-log.png` |
 | 12 | Open `http://localhost/grantdb/config.php` | 403 Forbidden | `P3-12-config-blocked.png` |
-
-Add one sentence per test to `docs/notes.md` saying what it proves.

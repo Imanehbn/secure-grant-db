@@ -242,21 +242,38 @@ Design and control list: docs/phase3_authentication.md.
   outside both web-servable folders, excluded from Git.
 - Known gap: data in transit (HTTP, no DB TLS) still pending - addressed in
   Phase 9. Full analysis: docs/phase6_data_protection.md.
-  ## 5. How to generate evidence for this phase
-1. Log in as `app_officer` and change a proposal's status with `update_proposal.php` -> `P7-01-update-record.png`.
-2. Try to delete a non-Draft proposal with `delete_proposal.php`, see it blocked -> `P7-02-delete-blocked.png`. Then delete an actual Draft one successfully -> `P7-03-delete-success.png`.
-3. Log in as `app_dba` (or `app_finance`) and open `view_researchers.php` -> `P7-04-view-sensitive.png`.
-4. Log in as `app_dba` and deactivate/unlock a test account via `admin_users.php` -> `P7-05-admin-action.png`.
-5. Deliberately fail a login 3 times for one test account, then log in as `app_auditor` and open `audit_log.php` -> `P7-06-detection-bruteforce.png` showing that account under "Detection 1".
-6. Screenshot the full recent-log table on the same page -> `P7-07-audit-log-raw.png`, and run at least one query from `07_audit_queries.sql` directly in phpMyAdmin/CLI as `app_auditor` -> `P7-08-sql-query-evidence.png`.
+  Phase 7: Database auditing and monitoring
 
-What each screenshot demonstrates (brief rule: "screenshots alone are not sufficient evidence"):
-- `P7-01` to `P7-05` prove each of the five required categories is actually being written, not just designed on paper.
-- `P7-02` specifically proves **blocked attempts are logged**, which matters because an attacker's unsuccessful attempts are often the most important thing an investigator needs.
-- `P7-06` to `P7-08` prove the log is *usable* for detection, per the brief's explicit requirement to "demonstrate how the collected information could be used to detect or investigate suspicious activity" - a table of rows nobody ever queries would not satisfy this.
+Extended the existing audit_log mechanism (built in Phase 3) to cover the 4 remaining required categories: access to sensitive information, record modification, record deletion, and administrative actions. Each new action calls the same audit() function from bootstrap.php, writing who, what, when, which resource and whether it succeeded.
 
-## 6. Known limitations (being honest, as in every prior phase)
-- Detection here is **manual/on-demand** (an auditor runs a query or opens a page). There is no automated alerting (e.g. an email or dashboard warning fired the moment a threshold is crossed) - that would be the next step in a production system, and is explicitly out of scope for a course lab.
-- The "off-hours" and "3 failures in 24h" thresholds are illustrative, not tuned against real traffic volume; a production system would calibrate these against a baseline.
-- `audit_log` itself is only protected by Phase 2's RBAC (only `role_auditor`/`role_dba` can read it, and nobody but the app's own `INSERT`-only path can write to it in normal operation) - it is not yet write-once/tamper-evident (e.g. no append-only storage, no hash chaining of log rows). A sufficiently privileged account (DBA) could in theory alter past log rows directly in the database; this is flagged here rather than solved, as a realistic limitation of a single-VM lab setup.
-- `view_researchers.php` shows **all** researchers to any allowed role for demo simplicity, rather than scoping by "only researchers on your own active grants" - a real system would add that narrower scoping on top of the role check.
+New pages: view_researchers.php (VIEW_SENSITIVE), update_proposal.php (UPDATE_RECORD), delete_proposal.php (DELETE_RECORD), admin_users.php (ADMIN_ACTION), audit_log.php (Auditor's view of the log, with 2 detection queries).
+app_login needed 3 extra privilege grants to make these pages work (sql/07_app_login_grants.sql): SELECT/UPDATE/DELETE on proposals, SELECT on researchers, SELECT on audit_log, and a column-level UPDATE on users (is_active, locked_until, failed_attempts). This is itself a least-privilege demonstration: MySQL correctly refused the UPDATE on is_active until the exact column was granted, proving Phase 2's column-level privileges are real, not just configured and unused.
+Test: update a proposal's status (P7-01-update-record.png)
+Logged in as app_officer, changed proposal 4 from Submitted to Under Review via update_proposal.php.
+Proves: record modification is logged with the resource identified down to the exact row (proposals:4).
+Test: blocked deletion attempt (P7-02-delete-blocked.png)
+Tried to delete proposal 1 (status Approved, not Draft) via delete_proposal.php. The app refused and showed "this attempt was logged."
+Proves: a blocked/refused attempt is still written to audit_log, not only successful actions — important for investigating someone who tries and fails.
+Test: successful deletion (P7-03-delete-success.png)
+Deleted proposal 7 (status Draft) successfully.
+Proves: a legitimate deletion under the allowed condition (Draft only) is logged as a successful DELETE_RECORD event.
+Test: access to sensitive data (P7-04-view-sensitive.png)
+Logged in as app_dba, opened view_researchers.php, which decrypts and displays the 3 researchers' Restricted-classification data (national ID, phone, bank account) from Phase 6.
+Proves: every time sensitive data is viewed, it is logged individually per row viewed (researchers:1, researchers:2, researchers:3), not just once per page load.
+Test: administrative action (P7-05-admin-action.png)
+Logged in as app_dba, deactivated test account app_pi3 (user ID 8) via admin_users.php, then reactivated it afterward.
+Proves: privileged account-management actions by the DBA role are individually logged, which Phase 10's incident investigation will rely on.
+Test: brute-force detection (P7-06-detection-bruteforce.png)
+Deliberately failed 3 logins in a row against app_pi with a wrong password, then logged in as app_auditor and opened audit_log.php.
+Result: the page's "Detection 1" query automatically grouped and flagged app_pi with 3 failures within 24 hours.
+Proves: the collected log data can actually detect a brute-force pattern, not just record individual events in isolation — this is the brief's explicit requirement to demonstrate detection, not only collection.
+Test: raw audit log (P7-07-audit-log-raw.png)
+Viewed the full recent-events table on audit_log.php, showing every event with timestamp, username, action, resource, success, and IP address together.
+Proves: all 5 required questions (who/what/when/which resource/was it successful) are answerable from a single table.
+Test: direct SQL query evidence (P7-08-sql-query-evidence.png)
+Ran the same brute-force detection query (sql/07_audit_queries.sql, query 1) directly in phpMyAdmin against the database, outside the PHP application.
+Proves: the detection logic isn't hidden inside the app — the same result can be reproduced with a plain SQL query, which matters for an auditor who may not want to rely on the application layer at all.
+Known limitations
+Detection is manual (an auditor opens the page or runs a query) — no automated alerting is implemented.
+The "3 failures / 24h" and "off-hours" thresholds in the detection queries are illustrative, not tuned to real traffic.
+audit_log itself is protected only by Phase 2's RBAC; it is not tamper-evident (no append-only storage or hash chaining), so a sufficiently privileged DBA account could in theory alter past entries. Flagged as a realistic limitation of a single-VM lab setup, not solved here.

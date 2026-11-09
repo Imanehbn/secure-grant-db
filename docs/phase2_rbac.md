@@ -66,4 +66,3 @@ Prefix: `C:\xampp\mysql\bin\mysql.exe -u USER -p grantdb -e "SQL"`
 - `P2-03` to `P2-17`: one screenshot per test above (allowed and denied)
 - `P2-18-revoke-demo.png`: the GRANT / REVOKE demonstration at the end of `02_users_roles.sql`
 
-For each screenshot, add one sentence to `notes.md` explaining what the result proves.

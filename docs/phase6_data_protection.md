@@ -18,8 +18,8 @@ Each encrypted value is stored as `IV (12 bytes) || TAG (16 bytes) || CIPHERTEXT
 
 | Protection | Status |
 |---|---|
-| **Data at rest** (the database files on disk) | ✅ Implemented this phase: `national_id_enc`, `phone_enc`, `bank_account_enc` are AES-256-GCM encrypted; a stolen `.frm`/`.ibd` file or `mysqldump` backup reveals only ciphertext |
-| **Data in transit** (application ↔ database, browser ↔ application) | ⏳ Not yet enabled. The Phase 1 baseline evidence (`P9-before-01-server-info.png`) already shows "SSL is not used" for the database connection, and the application still runs on plain HTTP. This is addressed in Phase 9 (hardening): enabling `require_secure_transport` on MariaDB and HTTPS via a certificate for Apache |
+| **Data at rest** (the database files on disk) |  Implemented this phase: `national_id_enc`, `phone_enc`, `bank_account_enc` are AES-256-GCM encrypted; a stolen `.frm`/`.ibd` file or `mysqldump` backup reveals only ciphertext |
+| **Data in transit** (application ↔ database, browser ↔ application) |  Not yet enabled. The Phase 1 baseline evidence (`P9-before-01-server-info.png`) already shows "SSL is not used" for the database connection, and the application still runs on plain HTTP. This is addressed in Phase 9 (hardening): enabling `require_secure_transport` on MariaDB and HTTPS via a certificate for Apache |
 
 This gap is intentional to call out, not hidden: encrypting data at rest does not protect it while it travels unencrypted between the browser, the web server and the database in the meantime.
 
