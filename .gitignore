@@ -5,3 +5,4 @@ config_secure.php
 *.sql.bak
 backup/*.sql
 keys/encryption.key.php
+desktop.ini

@@ -70,6 +70,23 @@ function require_login(): void
     }
 }
 
+// Phase 7: application-level role gate. The database's own GRANTs (Phase 2)
+// are the real enforcement layer; this just stops the wrong role from even
+// seeing a page/button it has no business using, and gives us a clean place
+// to log an ACCESS_DENIED attempt.
+function require_role(mysqli $db, array $allowedRoles): void
+{
+    require_login();
+    $role = (string)($_SESSION['role'] ?? '');
+    if (!in_array($role, $allowedRoles, true)) {
+        audit($db, (int)$_SESSION['user_id'], (string)$_SESSION['username'],
+              'ACCESS_DENIED', $_SERVER['SCRIPT_NAME'] ?? 'unknown', false,
+              'role ' . $role . ' is not permitted on this page');
+        http_response_code(403);
+        exit('Forbidden: your role does not have access to this page.');
+    }
+}
+
 function csrf_token(): string
 {
     if (empty($_SESSION['csrf'])) {

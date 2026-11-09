@@ -242,3 +242,21 @@ Design and control list: docs/phase3_authentication.md.
   outside both web-servable folders, excluded from Git.
 - Known gap: data in transit (HTTP, no DB TLS) still pending - addressed in
   Phase 9. Full analysis: docs/phase6_data_protection.md.
+  ## 5. How to generate evidence for this phase
+1. Log in as `app_officer` and change a proposal's status with `update_proposal.php` -> `P7-01-update-record.png`.
+2. Try to delete a non-Draft proposal with `delete_proposal.php`, see it blocked -> `P7-02-delete-blocked.png`. Then delete an actual Draft one successfully -> `P7-03-delete-success.png`.
+3. Log in as `app_dba` (or `app_finance`) and open `view_researchers.php` -> `P7-04-view-sensitive.png`.
+4. Log in as `app_dba` and deactivate/unlock a test account via `admin_users.php` -> `P7-05-admin-action.png`.
+5. Deliberately fail a login 3 times for one test account, then log in as `app_auditor` and open `audit_log.php` -> `P7-06-detection-bruteforce.png` showing that account under "Detection 1".
+6. Screenshot the full recent-log table on the same page -> `P7-07-audit-log-raw.png`, and run at least one query from `07_audit_queries.sql` directly in phpMyAdmin/CLI as `app_auditor` -> `P7-08-sql-query-evidence.png`.
+
+What each screenshot demonstrates (brief rule: "screenshots alone are not sufficient evidence"):
+- `P7-01` to `P7-05` prove each of the five required categories is actually being written, not just designed on paper.
+- `P7-02` specifically proves **blocked attempts are logged**, which matters because an attacker's unsuccessful attempts are often the most important thing an investigator needs.
+- `P7-06` to `P7-08` prove the log is *usable* for detection, per the brief's explicit requirement to "demonstrate how the collected information could be used to detect or investigate suspicious activity" - a table of rows nobody ever queries would not satisfy this.
+
+## 6. Known limitations (being honest, as in every prior phase)
+- Detection here is **manual/on-demand** (an auditor runs a query or opens a page). There is no automated alerting (e.g. an email or dashboard warning fired the moment a threshold is crossed) - that would be the next step in a production system, and is explicitly out of scope for a course lab.
+- The "off-hours" and "3 failures in 24h" thresholds are illustrative, not tuned against real traffic volume; a production system would calibrate these against a baseline.
+- `audit_log` itself is only protected by Phase 2's RBAC (only `role_auditor`/`role_dba` can read it, and nobody but the app's own `INSERT`-only path can write to it in normal operation) - it is not yet write-once/tamper-evident (e.g. no append-only storage, no hash chaining of log rows). A sufficiently privileged account (DBA) could in theory alter past log rows directly in the database; this is flagged here rather than solved, as a realistic limitation of a single-VM lab setup.
+- `view_researchers.php` shows **all** researchers to any allowed role for demo simplicity, rather than scoping by "only researchers on your own active grants" - a real system would add that narrower scoping on top of the role check.

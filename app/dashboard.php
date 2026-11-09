@@ -17,6 +17,22 @@ $menus = [
     'Auditor'        => 'Read-only access to the audit log and financial records.',
 ];
 $role = (string)$_SESSION['role'];
+
+// Phase 7: which audit/admin demo pages this role can reach.
+$links = [];
+if (in_array($role, ['DBA', 'FinanceOfficer', 'Auditor'], true)) {
+    $links['view_researchers.php'] = 'View researcher sensitive data';
+}
+if (in_array($role, ['GrantsOfficer', 'DBA'], true)) {
+    $links['update_proposal.php'] = 'Update a proposal status';
+    $links['delete_proposal.php'] = 'Delete a Draft/Withdrawn proposal';
+}
+if ($role === 'DBA') {
+    $links['admin_users.php'] = 'Admin: manage user accounts';
+}
+if (in_array($role, ['Auditor', 'DBA'], true)) {
+    $links['audit_log.php'] = 'View audit log';
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -44,6 +60,16 @@ $role = (string)$_SESSION['role'];
     <dt>Signed in at</dt>
     <dd><?= h(date('Y-m-d H:i:s', (int)$_SESSION['login_time'])) ?></dd>
   </dl>
+  <?php if ($links): ?>
+  <dl>
+    <dt>Available actions</dt>
+    <dd>
+      <?php foreach ($links as $href => $label): ?>
+        <div><a href="<?= h($href) ?>"><?= h($label) ?></a></div>
+      <?php endforeach; ?>
+    </dd>
+  </dl>
+  <?php endif; ?>
   <form method="post" action="logout.php">
     <input type="hidden" name="csrf" value="<?= h(csrf_token()) ?>">
     <button type="submit">Sign out</button>
