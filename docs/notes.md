@@ -277,3 +277,38 @@ Known limitations
 Detection is manual (an auditor opens the page or runs a query) — no automated alerting is implemented.
 The "3 failures / 24h" and "off-hours" thresholds in the detection queries are illustrative, not tuned to real traffic.
 audit_log itself is protected only by Phase 2's RBAC; it is not tamper-evident (no append-only storage or hash chaining), so a sufficiently privileged DBA account could in theory alter past entries. Flagged as a realistic limitation of a single-VM lab setup, not solved here.
+## Phase 8: Backup and recovery
+Created a full `mysqldump` backup of `grantdb` (with `--routines --triggers --hex-blob`), simulated a critical table loss by dropping `researchers` (the table holding Phase 6's encrypted sensitive data), restored from the backup, and verified the recovered data byte-for-byte, not just that the table existed again.
+
+### Test: backup created (P8-01-backup-created.png)
+- Ran `mysqldump` against `grantdb`, producing a 47,758-byte `.sql` file.
+- Proves: a reproducible backup procedure exists and actually captures the database content.
+
+### Test: simulated disaster (P8-02-table-dropped.png, P8-03-app-broken.png)
+- A plain `DROP TABLE researchers;` was refused by MariaDB (error 1451, foreign key constraint) because `proposals` references it — referential integrity acting as a safeguard on its own.
+- Disabled foreign key checks and dropped the table to simulate a scenario where that safeguard is bypassed (e.g. an admin script run carelessly).
+- Confirmed the table was really gone (10 tables instead of 11), and that `view_researchers.php` genuinely broke (HTTP 500) as a result.
+- Proves: this was a real, demonstrated loss of a critical table, not a staged example.
+
+### Test: restore (P8-04-restore-command.png, P8-05-table-restored.png)
+- Restored from the backup with `mysql -u root grantdb` (piped in via PowerShell).
+- `researchers` reappeared with the correct row count (3).
+- Proves: the backup can actually be used to bring a dropped table back.
+
+### Test: integrity verification (P8-06-decrypt-verified.png, P8-07-app-working-again.png)
+- Re-ran `tools/decrypt_check.php`: all 3 researchers' encrypted data decrypted correctly, and the raw ciphertext bytes matched exactly what they were before the table was dropped.
+- Re-opened `view_researchers.php` in the browser: worked again, same data as before.
+- Proves: the brief's requirement that "simply showing a backup file exists is not sufficient" is met — the actual content was verified correct, not just present.
+
+### Real problem found and fixed during this phase (not staged - documented honestly)
+The first restore attempt (before adding `--hex-blob` to the backup command) completed with no errors, but corrupted the 3 encrypted columns: `decrypt_check.php` failed with "wrong key or data was tampered with" (AES-GCM's own authentication check caught it), and the raw bytes showed repeated `3f` (the `?` character) where random ciphertext should be. Root cause: piping the backup file through PowerShell as text (`Get-Content | mysql.exe`) is unsafe for raw binary data, even though it's harmless for ordinary text. Fixed by adding `--hex-blob` to `mysqldump`, which stores binary columns as plain ASCII hex text, immune to this. The 3 affected rows were independently recovered from the original Phase 4 plaintext seed data and re-encrypted, then the whole backup/drop/restore cycle was redone cleanly with the fix, producing the final evidence above.
+
+### Second, unrelated problem found and fixed during this phase
+While investigating an unrelated "access denied" error for `dba_admin`, found that MariaDB's own internal `mysql.db` privilege table was genuinely corrupted (Aria storage engine checksum error) and `role_dba` had lost its database-wide privilege grant entirely. This is very likely the same root cause as the unexplained "all accounts and roles missing" incident from Phase 3. Repaired with `mysqlcheck --auto-repair`, which recovered by wiping the corrupted rows, then restored the lost grants using `sql/08_repair_role_grants.sql` (deliberately written to skip the password-setting lines of `02_users_roles.sql`, so no passwords were reset). This also showed a real gap in the backup procedure itself: it only covers the `grantdb` database, not MariaDB's own `mysql` system database (accounts/roles/grants) — documented as a known limitation.
+
+### Known limitations
+- Manual/on-demand backup only, no scheduling.
+- Full-database restore only, not table-level.
+- Backup files are not encrypted at rest (contain the same ciphertext as the live DB, plus plaintext for non-encrypted columns).
+- Stored locally only, single point of failure if the VM is lost.
+- Backup procedure does not cover the `mysql` system database (accounts/roles), a gap this phase's own incident exposed directly.
