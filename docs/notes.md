@@ -312,3 +312,51 @@ While investigating an unrelated "access denied" error for `dba_admin`, found th
 - Backup files are not encrypted at rest (contain the same ciphertext as the live DB, plus plaintext for non-encrypted columns).
 - Stored locally only, single point of failure if the VM is lost.
 - Backup procedure does not cover the `mysql` system database (accounts/roles), a gap this phase's own incident exposed directly.
+## Phase 9: Database hardening
+Reviewed the Phase 1 baseline (docs/phase9_hardening.md) item by item and addressed all 12 required areas: default/shared accounts, unnecessary database users, unnecessary databases, excessive privileges, weak application accounts, network exposure, logging configuration, configuration files, unnecessary features/services, file permissions, patch/update status, and backup protection.
+
+### Test: default/shared accounts fixed (P9-after-01 to P9-after-04)
+- Set a root password, dropped the redundant `root@127.0.0.1` and `root@::1` accounts (kept only `root@localhost`), and dropped `pma@localhost` and `labuser@localhost` (neither had a legitimate current use).
+- Before dropping the IP-based root accounts, confirmed phpMyAdmin actually connects via `127.0.0.1`, not `localhost`, and switched its config to `localhost` first to avoid locking myself out.
+- Proves: no more passwordless administrative access, and the account list only contains what's actually needed.
+
+### Test: unnecessary users investigated, not blindly removed (no new screenshot, documented in docs/phase9_hardening.md)
+- Found two accounts not created by `sql/02_users_roles.sql`: `app_search` and `app_vuln`. Checked their grants and my own Phase 4/5 notes before touching anything, and confirmed they are the deliberate accounts used to demonstrate the Phase 4 SQL injection attack and the Phase 5 fix, not stale leftovers.
+- Proves: hardening means investigating before removing, not deleting anything that looks unusual.
+
+### Test: unnecessary databases removed (P9-after-05, P9-after-06)
+- Dropped the default `test` database. Left `university_security` untouched since it belongs to a separate, unrelated course exercise.
+
+### Test: excessive privileges reviewed (P9-after-07)
+- Confirmed `app_login` (the account the real application actually uses) has only scoped, least-privilege grants via `SHOW GRANTS`, nowhere close to root's `ALL PRIVILEGES`. Root's broad privileges are necessary for it to function as the admin account and are never used by the application itself.
+
+### Test: network exposure fixed (P9-after-08 to P9-after-11)
+- Added `bind-address=127.0.0.1` to `my.ini`, restarted MySQL, and confirmed via `netstat` that the server now listens only on `127.0.0.1:3306` instead of `0.0.0.0:3306`/`[::]:3306`.
+- Added a Windows Firewall inbound rule explicitly blocking external access to port 3306, as a second, independent layer of defense.
+- Verified the application and phpMyAdmin still work locally after both changes.
+
+### Test: logging configuration reviewed (P9-after-12)
+- Confirmed MariaDB's own error log (`log_error`) is active with real content, including a line that independently proved the `bind-address` fix took effect ("Server socket created on IP: '127.0.0.1'").
+- Deliberately left `general_log` and `slow_query_log` off: full query logging would write the plaintext values behind Phase 6's encrypted columns into an unprotected log file, which would undermine that work. The Phase 7 `audit_log` already covers accountability without that risk.
+
+### Test: unnecessary features/services reviewed (P9-before-after-08)
+- Checked the XAMPP Control Panel: only Apache and MySQL are running. FileZilla, Mercury, and Tomcat are present but were never started.
+
+### Test: file permissions reviewed (P9-after-13)
+- Checked Windows file permissions on `config.php` and `keys/encryption.key.php`, the two most sensitive files in the project. Both are restricted to the file owner, SYSTEM, and Administrators only — no broader group has access.
+
+### Test: patch/update status documented (docs/phase9_hardening.md, item 11 detail)
+- Checked MariaDB 10.4.32, PHP 8.2.12, and Apache 2.4.58 against current support status. MariaDB 10.4 reached end-of-life in June 2024; PHP 8.2 is past active support and reaches full end-of-life in December 2026; Apache 2.4.58 has 68 CVEs fixed in later releases, including one critical one.
+- Decided to document the gap with a concrete remediation plan rather than attempt a risky in-place upgrade of three interdependent components this close to the project deadline, and emailed the professor to confirm this approach is acceptable.
+
+### Test: backup protection fixed (P9-before-14, P9-after-14, P9-after-15)
+- Encrypted the most recent backup with 7-Zip (AES-256, filenames also encrypted), then deleted the plaintext copy so it doesn't linger on disk.
+- Verified both directions: extraction with a wrong password fails ("Data error: Wrong password?"), extraction with the correct password succeeds.
+- Proves: the encryption is real and enforced, not just a cosmetic password box.
+
+### Known limitations
+- Backups are still stored locally only (single point of failure if the VM is lost) — accepted as reasonable for a single lab VM, not a production deployment.
+- Patch/update status is documented with a remediation plan but not yet executed, a deliberate decision given the project timeline (see above).
+- `general_log`/`slow_query_log` remain off by design; if deeper server-level query auditing were ever needed, it would require its own protected storage, which is out of scope here.
+
+
