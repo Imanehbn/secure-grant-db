@@ -358,5 +358,28 @@ Reviewed the Phase 1 baseline (docs/phase9_hardening.md) item by item and addres
 - Backups are still stored locally only (single point of failure if the VM is lost) — accepted as reasonable for a single lab VM, not a production deployment.
 - Patch/update status is documented with a remediation plan but not yet executed, a deliberate decision given the project timeline (see above).
 - `general_log`/`slow_query_log` remain off by design; if deeper server-level query auditing were ever needed, it would require its own protected storage, which is out of scope here.
+Phase 10: Security incident investigation
+
+Ran a simulated two-part incident against the live system — matching the brief's example of unauthorized access attempts plus unusual privileged-account activity — then investigated it using only the Phase 7 audit tools, as a real investigator would.
+
+Test: incident produced (not staged after the fact)
+Part A: 5 failed logins against app_reviewer, triggering the Phase 3 lockout automatically.
+Part B: immediately after, app_dba viewed all 3 researchers' Restricted data and deactivated another account (app_pi2).
+Test: detection (P10-01-detection-bruteforce.png, P10-02-detection-unusual-activity.png)
+audit_log.php's two detection queries automatically flagged both halves: app_reviewer with 5 brute-force failures, and app_dba with 6 VIEW_SENSITIVE events and 1 ADMIN_ACTION in 24h.
+Proves: the Phase 7 detection logic works on a real, freshly-produced incident, not only on the earlier test data it was built against.
+Test: raw log reconstruction (P10-03-raw-log-incident-window.png)
+Read the raw audit_log table directly to build a full timeline: who, what, when, which resource, success/failure, down to the millisecond.
+Noticed the 3 VIEW_SENSITIVE events were only 4ms apart — too fast for a human reading 3 records, a genuine artifact of how the page logs each row as it renders all three at once. Documented honestly rather than overstating it as proof of malicious automation.
+Test: independent confirmation (P10-04-sql-direct-query.png, P10-05-account-states.png)
+Reproduced the brute-force detection with a direct SQL query, outside the application.
+Checked the users table directly: app_reviewer shows locked_until and failed_attempts=5; app_pi2 shows is_active=0 — the database state itself corroborates the log, not just the log's own claim about itself.
+Findings
+
+Answered the brief's 7 required questions (what/when/who/which resources/what controls failed/what evidence/what corrective actions) in full in docs/phase10_incident_investigation.md. Key takeaway: the lockout and audit logging controls worked correctly and caught everything; the gaps exposed were the lack of real-time alerting, the audit log not being tamper-evident against a sufficiently privileged account, and no MFA for the DBA role.
+
+Known limitations
+This was a simulated incident performed by the project author, not a real attacker — evaluated structurally (what the logs would show, what controls would/wouldn't catch it).
+Both parts ran from the same machine, so IP-based anomaly detection couldn't be demonstrated (both show ::1).
 
 
